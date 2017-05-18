@@ -28,6 +28,13 @@
 
 import { MAP } from '../actionTypes';
 
+export function setProjection(projectionCode) {
+    return {
+        type: MAP.SET_PROJECTION,
+        projectionCode
+    }
+}
+
 export function move(center, resolution) {
     return {
         type: MAP.MOVE,
@@ -109,6 +116,13 @@ export function zoomToExtent(extent, projection) {
         type: MAP.ZOOM_TO_EXTENT,
         extent,
         projection
+    }
+}
+
+export function zoomToResolution(resolution) {
+    return {
+        type: MAP.ZOOM_TO_RESOLUTION,
+        resolution
     }
 }
 

@@ -73,6 +73,7 @@ app.loadMapbook({url: 'mapbook.xml'}).then(function() {
     app.add(gm3.components.Toolbar, 'toolbar');
     app.add(gm3.components.Grid, 'results-grid');
     app.add(gm3.components.Version, 'version');
+    app.add(gm3.components.JumpToScale, 'jump-to-scale');
     app.add(gm3.components.CoordinateDisplay, 'coordinate-display', {
         usng: true, latLon: true
     });

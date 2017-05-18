@@ -33,6 +33,7 @@ import * as util from '../util';
 const default_view = {
     center: [0, 0],
     resolution: 1000,
+    projection: null,
     extent: null,
     activeSource: null,
     interactionType: null,
@@ -46,7 +47,8 @@ export default function mapReducer(state = default_view, action) {
             //  set in order to zoom there.  After the 'zoom' action happens
             //  it is reset to null.
             const new_view = {
-                extent: null
+                extent: null,
+                targetResolution: null
             };
             for(const key of ['center', 'zoom', 'resolution']) {
                 if(action[key]) {
@@ -56,6 +58,8 @@ export default function mapReducer(state = default_view, action) {
             return Object.assign({}, state, new_view);
         case MAP.ZOOM_TO_EXTENT:
             return Object.assign({}, state, {extent: {bbox: action.extent, projection: action.projection}});
+        case MAP.ZOOM_TO_RESOLUTION:
+            return Object.assign({}, state, {targetResolution: action.resolution});
         case MAP.CHANGE_TOOL:
             return Object.assign({}, state, {
                 activeSource: action.src, 
@@ -69,6 +73,10 @@ export default function mapReducer(state = default_view, action) {
             return Object.assign({}, state, {
                 selectionFeatures: []
             });
+        case MAP.SET_PROJECTION:
+            return Object.assign({}, state, {
+                projection: action.projectionCode
+            })
         default:
             return state;
     }

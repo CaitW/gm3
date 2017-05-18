@@ -598,6 +598,9 @@ class Map extends Component {
             view: new ol.View(view_params)
         });
 
+        // assuming the map's projection will be configurable in the future
+        this.props.store.dispatch(mapActions.setProjection(this.map.getView().getProjection().getCode()));
+
         // when the map moves, dispatch an action
         this.map.on('moveend', () => {
             // get the view of the map
@@ -771,7 +774,9 @@ class Map extends Component {
             // move the map to the new extent.
             this.map.getView().fit(bbox, this.map.getSize()); 
         }
-
+        if(nextProps && nextProps.mapView.targetResolution) {
+            this.map.getView().setResolution(nextProps.mapView.targetResolution);
+        }
         // ensure that the selection features have been 'cleared' 
         //  appropriately.
         if(nextProps && nextProps.mapView.selectionFeatures.length === 0) {
