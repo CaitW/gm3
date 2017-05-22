@@ -24,7 +24,7 @@
 
 /** Dictionary of GeoMoose Actions.
  *
- *  Every action for GeoMoose needs to be mapped to 
+ *  Every action for GeoMoose needs to be mapped to
  *  one of the 'action' dictionaries below.
  *
  */
@@ -37,6 +37,8 @@ export const MAPSOURCE = {
     LAYER_VIS: 'MAPSOURCE_LAYER_VIS',
     LAYER_FAVORITE: 'MAPSOURCE_LAYER_FAVORITE',
     REFRESH: 'MAPSOURCE_REFRESH',
+
+    SET_Z: 'MAPSOURCE_SET_Z',
 
     ADD_FEATURES: 'MAPSOURCE_ADD_FEATURES',
     REMOVE_FEATURE: 'MAPSOURCE_REMOVE_FEATURE',
@@ -113,5 +115,5 @@ export const UI = {
 export const PRINT = {
     FINISHED: 'PRINT_DONE',
     REQUEST: 'PRINT_REQUEST',
-    IMAGE: 'PRINT_IMAGE', 
+    IMAGE: 'PRINT_IMAGE',
 };

@@ -42,7 +42,7 @@ function addElement(tree, parentId, child) {
         let element = tree[i];
         if(element.type === 'group') {
             if(element.id === parentId) {
-                
+
             }
         }
     }
@@ -95,9 +95,10 @@ function parseLayer(store, layerXml) {
 
     // This is the first attempt at a new model
     //  for parsing the tool availabiltiy from the XML,
-    //  somehwere this should be more configurable but 
+    //  somehwere this should be more configurable but
     //  for now it'll "work."
     const tools = [
+        'down', 'up',
         'zoomto',
         'upload', 'download',
         'fade', 'unfade',
@@ -146,7 +147,7 @@ function parseLayer(store, layerXml) {
             new_layer.src.push(s);
 
             // if any of the underlaying paths in the src
-            //  are false, then turn all of them off. 
+            //  are false, then turn all of them off.
             src_favorite = src_favorite || mapSources.isFavoriteLayer(store, s);
 
             // check to see if a 'default' name is needed
@@ -205,7 +206,7 @@ function subtreeActions(store, parent, subtreeXml) {
 }
 
 
-/** Read in the XML and returns a list of 
+/** Read in the XML and returns a list of
  *  actions to populate the store.
  *
  */
