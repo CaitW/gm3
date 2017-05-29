@@ -1,7 +1,7 @@
 /*
  * The MIT License (MIT)
  *
- * Copyright (c) 2016-2017 Dan "Ducky" Little
+ * Copyright (c) 2017 Dan "Ducky" Little
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -22,27 +22,22 @@
  * SOFTWARE.
  */
 
-import React from 'react';
-import TextInput from './text';
+/* All of the JSTS integration is integrated into this module.
+ *
+ * This was done with the intent of developing a system that makes
+ * JSTS optional into the future.  And/or makes it so that different
+ * geometry libraries can be substituted in the future.
+ *
+ */
 
+import BufferOp from 'jsts/org/locationtech/jts/operation/buffer/BufferOp';
+import GeoJSONParser from 'jsts/org/locationtech/jts/io/GeoJSONParser';
 
-export default class SelectInput extends TextInput {
+export function buffer(feature, meters) {
+    const parser = new GeoJSONParser();
+    const jsts_geom = parser.read(feature);
 
+    const buffer_feature = BufferOp.bufferOp(jsts_geom, meters);
 
-    renderOption(opt) {
-        return (<option key={opt.value} value={opt.value}>{opt.label}</option>);
-    }
-
-    render() {
-        const id = this.getId();
-
-        return (
-            <div className='service-input select'>
-                <label htmlFor={ 'input-' + id }>{ this.props.field.label }</label>
-                <select id={ 'input-' + id} value={this.state.value} onChange={this.onChange}>
-                { this.props.field.options.map(this.renderOption) }
-                </select>
-            </div>
-        );
-    }
+    return parser.write(buffer_feature);
 }

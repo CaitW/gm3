@@ -30,10 +30,16 @@ import { MAPSOURCE } from '../actionTypes';
 
 import * as util from '../util';
 
+var MS_Z_INDEX = 100000;
+
 /** Add a map-source using a MapSource
  *  object.
  */
 export function add(mapSource) {
+    if(typeof(mapSource.zIndex) !== 'number') {
+        mapSource.zIndex = MS_Z_INDEX;
+        MS_Z_INDEX--;
+    }
     return {
         type: MAPSOURCE.ADD,
         mapSource
@@ -146,8 +152,6 @@ function mapServerToWFS(msXml, conf) {
     return wfs_conf;
 }
 
-var MS_Z_INDEX = 100000;
-
 /** Add a map-source from XML
  *
  */
@@ -158,10 +162,10 @@ export function addFromXml(xml, config) {
         urls: util.getTagContents(xml, 'url', true),
         type: xml.getAttribute('type'),
         label: xml.getAttribute('title'),
+        opacity: xml.getAttribute('opacity'),
         zIndex: xml.getAttribute('z-index'),
         queryable: util.parseBoolean(xml.getAttribute('queryable'), true),
         refresh: null,
-        style: null,
         layers: [],
         params: {}
     }
@@ -169,11 +173,13 @@ export function addFromXml(xml, config) {
     // handle setting up the zIndex
     if(map_source.zIndex) {
         map_source.zIndex = parseInt(map_source.zIndex);
-    } else {
-        map_source.zIndex = MS_Z_INDEX;
-        MS_Z_INDEX--;
     }
 
+    // try to get an opacity,  if it won't parse then default to 1.0
+    map_source.opacity = parseFloat(map_source.opacity);
+    if(isNaN(map_source.opacity)) {
+        map_source.opacity = 1.0;
+    }
 
     // allow server-type hinting for hidpi displays.
     let server_type = xml.getAttribute('server-type');
@@ -200,18 +206,6 @@ export function addFromXml(xml, config) {
         }
     }
 
-    // check to see if there are any style definitions
-    let style = util.getTagContents(xml, 'style', false);
-    if(style && style.length > 0) {
-        // convert to JSON
-        try {
-            map_source.style = JSON.parse(style);
-        } catch(err) {
-            console.error('There was an error parsing the style for: ', map_source.name);
-            console.error('Error details', err);
-        }
-    }
-
 
     // mix in the params
     Object.assign(map_source.params, parseParams(xml));
@@ -230,7 +224,10 @@ export function addFromXml(xml, config) {
             selectable: util.parseBoolean(layerXml.getAttribute('selectable')),
             label: layer_title ? layer_title : map_source.label,
             templates: {},
-            legend: null
+            legend: null,
+            style: null,
+            filter: null,
+            transforms: {},
         };
 
         // user defined legend.
@@ -264,6 +261,29 @@ export function addFromXml(xml, config) {
             }
 
             layer.templates[template_name] = template_def;
+
+
+        }
+
+        // catalog the transforms for the layer
+        const transforms = layerXml.getElementsByTagName('transform');
+        for(const transform of transforms) {
+            layer.transforms[transform.getAttribute('attribute')] =
+                transform.getAttribute('function');
+        }
+
+
+
+        // check to see if there are any style definitions
+        let style = util.getTagContents(layerXml, 'style', false);
+        if(style && style.length > 0) {
+            // convert to JSON
+            try {
+                layer.style = JSON.parse(style);
+            } catch(err) {
+                console.error('There was an error parsing the style for: ', map_source.name);
+                console.error('Error details', err);
+            }
         }
 
         map_layers.push(addLayer(map_source.name, layer));
@@ -550,5 +570,20 @@ export function setMapSourceZIndex(mapSourceName, zIndex) {
         type: MAPSOURCE.SET_Z,
         mapSourceName,
         zIndex
+    };
+}
+
+/* Get an action for setting the opacity of a Map Source
+ *
+ * @param mapSourceName The name of the map-source
+ * @param opacity       The new opacity (float between 0 and 1)
+ *
+ * @return action.
+ */
+export function setOpacity(mapSourceName, opacity) {
+    return {
+        type: MAPSOURCE.SET_OPACITY,
+        mapSourceName,
+        opacity
     };
 }

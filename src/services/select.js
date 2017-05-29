@@ -49,6 +49,7 @@ function SelectService(Application, options) {
         'MultiPoint': true,
         'Polygon': true,
         'LineString': true,
+        'Select': true,
         'default': 'Polygon',
         'buffer': true
     };
@@ -71,6 +72,9 @@ function SelectService(Application, options) {
         default: options.queryLayers ? options.queryLayers[0].value : '',
         options: options.queryLayers ? options.queryLayers : []
     }];
+
+    /** Alow shapes to be buffered. */
+    this.bufferAvailable = true;
 
     /** This function is called everytime there is an select query.
      *
@@ -132,23 +136,5 @@ function SelectService(Application, options) {
         //  this line has not finished, this prevents an accidental
         //  double-rendering.
         this.hasRendered[queryId] = true;
-
-        // render a set of features on a layer.
-        var all_features = [];
-        for(var i = 0, ii = query.layers.length; i < ii; i++) {
-            var path = query.layers[i];
-            if(query.results[path] && !query.results[path].failed) {
-                all_features = all_features.concat(query.results[path]);
-            }
-        }
-
-        // when features have been returned, clear out the old features
-        //  and put the new features on the highlight layer.
-        if(all_features.length > 0) {
-            Application.clearFeatures(this.highlightPath);
-            Application.addFeatures(this.highlightPath, all_features);
-        }
     }
-
-
 }

@@ -36,13 +36,34 @@ import Request from 'reqwest';
 import { connect } from 'react-redux';
 
 import uuid from 'uuid';
+import md5 from 'md5';
 
-import * as olMapboxStyle from 'ol-mapbox-style';
+import getStyleFunction from 'mapbox-to-ol-style';
 
 import * as mapSourceActions from '../actions/mapSource';
 import * as mapActions from '../actions/map';
 
 import * as util from '../util';
+import * as jsts from '../jsts';
+
+import GeoJSONFormat from 'ol/format/geojson';
+import GML2Format from 'ol/format/gml2';
+import WFSFormat from 'ol/format/wfs';
+import WMSGetFeatureInfoFormat from 'ol/format/wmsgetfeatureinfo';
+
+import VectorSource from 'ol/source/vector';
+import VectorLayer from 'ol/layer/vector';
+import ol_filters from 'ol/format/filter';
+import proj from 'ol/proj';
+
+import olControl from 'ol/control/control';
+
+import olView from 'ol/view';
+import olMap from 'ol/map';
+
+import olSelectInteraction from 'ol/interaction/select';
+import olDrawInteraction from 'ol/interaction/draw';
+
 
 /* Import the various layer types */
 import * as wmsLayer from './layers/wms';
@@ -107,20 +128,6 @@ class Map extends Component {
         }
     }
 
-    /** Adds vector feature events to a vector-type layer.
-     *
-     *  @param mapSourceName
-     *  @param layerName
-     *  @param {ol.source.Vector} source
-     *
-     */
-    addFeatureEvents(mapSourceName, layerName, source) {
-
-        // geojson -- the one true Javascript object representation.
-        source.on('addfeature', (evt) => {
-        });
-    }
-
     /** Create an OL Layers based on a GM MapSource definition
      *
      *  @param mapSource
@@ -157,7 +164,7 @@ class Map extends Component {
         //       ol3 makes a lot of web-mercator assumptions.
         let projection = 'EPSG:3857';
 
-        let geojson = new ol.format.GeoJSON();
+        let geojson = new GeoJSONFormat();
         let view = this.props.mapView;
 
         // get the map source
@@ -186,7 +193,7 @@ class Map extends Component {
                     // not all WMS services play nice and will return the
                     //  error message as a 200, so this still needs checked.
                     if(response) {
-                        let gml_format = new ol.format.WMSGetFeatureInfo();
+                        let gml_format = new WMSGetFeatureInfoFormat();
                         let features = gml_format.readFeatures(response.responseText);
                         let js_features = geojson.writeFeaturesObject(features).features;
 
@@ -257,9 +264,9 @@ class Map extends Component {
         //  reprojected on render.
         let query_projection = projection;
         if(map_source.wgs84Hack) {
-            query_projection = new ol.proj.get('EPSG:4326');
+            query_projection = new proj.get('EPSG:4326');
         }
-        const geojson_format = new ol.format.GeoJSON({
+        const geojson_format = new GeoJSONFormat({
             dataProjection: 'EPSG:4326',
             featureProjection: query_projection
         });
@@ -277,25 +284,25 @@ class Map extends Component {
         // map the functions from OpenLayers to the internal
         //  types
         let filter_mapping = {
-            'like': ol.format.filter.like,
+            'like': ol_filters.like,
             'ilike': function(name, value) {
-                return ol.format.filter.like(name, value, '*', '.', '!', false);
+                return ol_filters.like(name, value, '*', '.', '!', false);
             },
-            'eq': ol.format.filter.equalTo,
-            'ge': ol.format.filter.greaterThanOrEqualTo,
-            'gt': ol.format.filter.greaterThan,
-            'le': ol.format.filter.lessThanOrEqualTo,
-            'lt': ol.format.filter.lessThan
+            'eq': ol_filters.equalTo,
+            'ge': ol_filters.greaterThanOrEqualTo,
+            'gt': ol_filters.greaterThan,
+            'le': ol_filters.lessThanOrEqualTo,
+            'lt': ol_filters.lessThan
         };
 
         let filters = [];
         if(query.selection && query.selection.geometry) {
             // convert the geojson geometry into a ol geometry.
-            let ol_geom = (new ol.format.GeoJSON()).readGeometry(query.selection.geometry);
+            let ol_geom = (new GeoJSONFormat()).readGeometry(query.selection.geometry);
             // convert the geometry to the query projection
             ol_geom.transform(projection, query_projection);
             // add the intersection filter to the filter stack.
-            filters.push(ol.format.filter.intersects(geom_field, ol_geom));
+            filters.push(ol_filters.intersects(geom_field, ol_geom));
         }
 
         for(let filter of query.fields) {
@@ -308,9 +315,9 @@ class Map extends Component {
         //  chained together to create the compound filter.
         let chained_filters = null;
         if(filters.length > 1) {
-            chained_filters = ol.format.filter.and(filters[0], filters[1]);
+            chained_filters = ol_filters.and(filters[0], filters[1]);
             for(let i = 2, ii = filters.length; i < ii; i++) {
-                chained_filters = ol.format.filter.and(chained_filters, filters[i]);
+                chained_filters = ol_filters.and(chained_filters, filters[i]);
             }
         } else {
             chained_filters = filters[0];
@@ -325,7 +332,7 @@ class Map extends Component {
         //  only supports GML.
         let output_format = 'text/xml; subtype=gml/2.1.2';
 
-        let feature_request = new ol.format.WFS().writeGetFeature({
+        let feature_request = new WFSFormat().writeGetFeature({
             srsName: query_projection.getCode(),
             featurePrefix: type_parts[0],
             featureTypes: [type_parts[1]],
@@ -350,13 +357,21 @@ class Map extends Component {
                 // not all WMS services play nice and will return the
                 //  error message as a 200, so this still needs checked.
                 if(response) {
-                    let gml_format = new ol.format.GML2();
+                    let gml_format = new GML2Format();
 
                     let features = gml_format.readFeatures(response);
                     for(const feature of features) {
                         feature.setGeometry(feature.getGeometry().transform(query_projection, projection));
                     }
-                    let js_features = (new ol.format.GeoJSON()).writeFeaturesObject(features).features;
+
+                    // features to add
+                    let js_features = (new GeoJSONFormat()).writeFeaturesObject(features).features;
+
+                    // get the transforms for the layer
+                    const transforms = mapSourceActions.getLayerByPath(this.props.store, queryLayer).transforms;
+
+                    // apply the transforms
+                    js_features = util.transformFeatures(transforms, js_features);
 
                     this.props.store.dispatch(
                         mapActions.resultsForQuery(queryId, queryLayer, false, js_features)
@@ -413,6 +428,24 @@ class Map extends Component {
                 this.props.dispatch(mapActions.startQuery(query_id));
                 // run the query.
                 this.runQuery(queries, query_id);
+            }
+        }
+
+        if(queries.order.length > 0) {
+            let query_id = queries.order[0];
+            let query = queries[query_id];
+            if(query.progress === 'finished') {
+                // check the filters
+                const filter_json = JSON.stringify(query.filter);
+                const filter_md5 = md5(filter_json);
+
+                if(this.currentQueryId !== query_id
+                   || this.currentQueryFilter !== filter_md5) {
+
+                    this.renderQueryLayer(query);
+                    this.currentQueryId = query_id;
+                    this.currentQueryFilter = filter_md5;
+                }
             }
         }
     }
@@ -483,6 +516,25 @@ class Map extends Component {
         }
     }
 
+    /* Render the query as a layer.
+     *
+     */
+    renderQueryLayer(query) {
+        if(this.props.mapSources.results) {
+            // clear the features
+            this.props.store.dispatch(mapSourceActions.clearFeatures('results', 'results'));
+            // get the path to the first set of features
+            const layer_path = Object.keys(query.results)[0];
+
+            // get the features, aftre applying the query filter
+            const features = util.matchFeatures(query.results[layer_path], query.filter);
+            // render only those features.
+            this.props.store.dispatch(mapSourceActions.addFeatures('results', 'results', features));
+        } else {
+            console.error('No "results" layer has been defined, cannot do smart query rendering.');
+        }
+    }
+
     /** Refresh the map-sources in the map
      *
      */
@@ -514,6 +566,7 @@ class Map extends Component {
                 this.olLayers[ms_name].setVisible(true);
             }
             this.olLayers[ms_name].setZIndex(map_source.zIndex);
+            this.olLayers[ms_name].setOpacity(map_source.opacity);
 
             // if there is a refresh interval set then
             //  create an interval which refreshes the
@@ -531,14 +584,56 @@ class Map extends Component {
         // this.sortOlLayers();
     }
 
+    /** Add features to the selection layer.
+     *
+     *  @param feature  An ol.Feature
+     *  @param buffer   A buffer distance to apply.
+     *
+     */
+    addSelectionFeature(feature, buffer) {
+        let geojson = new GeoJSONFormat();
+        let json_feature = geojson.writeFeatureObject(feature);
+
+
+        // assign the feature a UUID.
+        json_feature.properties = {
+            id: uuid.v4()
+        };
+
+        if(buffer !== 0 && !isNaN(buffer)) {
+            const buffered_geom = jsts.buffer(json_feature.geometry, buffer);
+
+            const buffered_feature = {
+                type: 'Feature',
+                geometry: buffered_geom,
+                properties: {
+                    buffer: true
+                }
+            };
+
+            json_feature = buffered_feature;
+        }
+
+        this.props.store.dispatch(mapActions.addSelectionFeature(json_feature));
+
+        this.props.store.dispatch(
+            mapSourceActions.clearFeatures('selection', 'selection')
+        );
+
+        this.props.store.dispatch(
+            mapSourceActions.addFeatures('selection', 'selection', [json_feature])
+        );
+
+    }
+
     /** Create a selection layer for temporary selection features.
      *
      */
     configureSelectionLayer() {
-        let src_selection = new ol.source.Vector();
+        let src_selection = new VectorSource();
 
-        this.selectionLayer = new ol.layer.Vector({
-            style: olMapboxStyle.getStyleFunction({
+        this.selectionLayer = new VectorLayer({
+            style: getStyleFunction({
                 'version': 8,
                 'layers': [
                     {
@@ -564,11 +659,7 @@ class Map extends Component {
 
         // geojson -- the one true Javascript object representation.
         src_selection.on('addfeature', (evt) => {
-            let geojson = new ol.format.GeoJSON();
-            let json_feature = geojson.writeFeatureObject(evt.feature);
-            // assign the feature a UUID.
-            json_feature.properties = {id: uuid.v4()};
-            this.props.store.dispatch(mapActions.addSelectionFeature(json_feature));
+            this.addSelectionFeature(evt.feature, this.props.mapView.selectionBuffer);
         });
     }
 
@@ -601,11 +692,11 @@ class Map extends Component {
         }
 
         // initialize the map.
-        this.map = new ol.Map({
+        this.map = new olMap({
             target: this.mapId,
             layers: [this.selectionLayer],
             logo: false,
-            view: new ol.View(view_params)
+            view: new olView(view_params)
         });
 
         // when the map moves, dispatch an action
@@ -644,6 +735,59 @@ class Map extends Component {
         this.refreshMapSources();
     }
 
+    /* Add a "stop" tool to the map.
+     *
+     * @param type The type of drawing tool.
+     *
+     */
+    createStopTool(type) {
+        // "translate" a description of the tool
+        let tool_desc = {
+            Polygon: 'End Drawing',
+            LineString: 'End Drawing',
+            Point: 'End Drawing',
+            Select: 'End Selection',
+        }[type];
+
+        // helpful default behaviour for when the description
+        //  is not defined.
+        if(typeof(tool_desc) === 'undefined') {
+            tool_desc = 'End ' + type;
+        }
+
+        // yikes this is super not-reacty.
+        // But it's necessary to bridge the gap to open layers.
+        const button = document.createElement('button');
+        button.innerHTML = '<i class="stop tool"></i> ' + tool_desc;
+        // when the button is clicked, stop drawing.
+        button.onclick = () => {
+            this.props.store.dispatch(mapActions.changeTool(null));
+        };
+
+        // create a wrapper div that places the button in the map
+        const elem = document.createElement('div');
+        elem.className = 'stop-tool ol-unselectable ol-control';
+        elem.appendChild(button);
+
+        // this creates the actual OL controls and adds it to the map
+        this.stopTool = new olControl({
+            element: elem
+        });
+        this.map.addControl(this.stopTool);
+    }
+
+    /* Remove the stop tool from the map.
+     *
+     */
+    removeStopTool() {
+        if(this.stopTool) {
+            // remove it from the map
+            this.map.removeControl(this.stopTool);
+            // set it to null.
+            this.stopTool = null;
+        }
+    }
+
     /** Switch the drawing tool.
      *
      *  @param type The type of drawing tool (Point,LineString,Polygon)
@@ -666,7 +810,6 @@ class Map extends Component {
         //  else use the specified source.
         let source = this.selectionLayer.getSource();
         if(!is_selection) {
-            console.log('MAP SOURCE', map_source_name);
             source = this.olLayers[map_source_name].getSource();
         }
 
@@ -679,9 +822,13 @@ class Map extends Component {
 
         // "null" interaction mean no more drawing.
         if(type !== null) {
+            // add a "stop" button to the map, this provides
+            //  clarity to the user as to what interaction is currently active.
+            this.createStopTool(type);
+
             // switch to the new drawing tool.
             if(type === 'Select') {
-                this.drawTool = new ol.interaction.Select({
+                this.drawTool = new olSelectInteraction({
                     layers: [this.olLayers[map_source_name]]
                 });
 
@@ -695,7 +842,7 @@ class Map extends Component {
                     }
                 });
             } else {
-                this.drawTool = new ol.interaction.Draw({
+                this.drawTool = new olDrawInteraction({
                     source: source,
                     type
                 });
@@ -715,7 +862,7 @@ class Map extends Component {
 
                 if(!is_selection) {
                     this.drawTool.on('drawend', (evt) => {
-                        let geojson = new ol.format.GeoJSON();
+                        let geojson = new GeoJSONFormat();
                         let json_feature = geojson.writeFeatureObject(evt.feature);
                         // assign the feature a UUID.
                         json_feature.properties = {_id: uuid.v4()};
@@ -752,6 +899,9 @@ class Map extends Component {
             // null out for logic.
             this.drawTool = null;
         }
+
+        // remove the stop tool from the map
+        this.removeStopTool();
     }
 
     /** This is a hack for OpenLayers. It makes sure the map is
@@ -781,7 +931,7 @@ class Map extends Component {
             const bbox_code = nextProps.mapView.extent.projection;
             if(bbox_code) {
                 const map_proj = this.map.getView().getProjection();
-                bbox = ol.proj.transformExtent(bbox, ol.proj.get(bbox_code), map_proj);
+                bbox = proj.transformExtent(bbox, proj.get(bbox_code), map_proj);
             }
             // move the map to the new extent.
             this.map.getView().fit(bbox, this.map.getSize());
@@ -808,6 +958,18 @@ class Map extends Component {
         if(nextProps && nextProps.mapView.selectionFeatures.length === 0) {
             if(this.selectionLayer) {
                 this.selectionLayer.getSource().clear();
+            }
+        }
+
+        // handle out of loop buffer distance changes
+        if(nextProps && nextProps.mapView.selectionBuffer !== this.props.mapView.selectionBuffer) {
+            if(this.selectionLayer && !isNaN(nextProps.mapView.selectionBuffer)) {
+                const buffer = nextProps.mapView.selectionBuffer;
+                const selection_src = this.selectionLayer.getSource();
+
+                for(const feature of selection_src.getFeatures()) {
+                    this.addSelectionFeature(feature, buffer);
+                }
             }
         }
 
